@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QT延时计算器 v2</title>
+    <style>
+        /* ============ 设计令牌 ============ */
+        :root {
+            --primary-500: #4F46E5;
+            --primary-400: #6366F1;
+            --primary-300: #818CF8;
+            --primary-50: #EEF2FF;
+            --bg-page: #F8FAFC;
+            --bg-card: #FFFFFF;
+            --bg-warm: #FEF3C7;
+            --text-900: #0F172A;
+            --text-700: #334155;
+            --text-500: #475569;
+            --text-300: #94A3B8;
+            --text-inverse: #FFFFFF;
+            --success: #10B981;
+            --success-50: #ECFDF5;
+            --danger: #EF4444;
+            --danger-50: #FEF2F2;
+            --warning: #F59E0B;
+            --warning-50: #FFFBEB;
+            --info: #3B82F6;
+            --info-50: #EFF6FF;
+            --border: #E2E8F0;
+            --border-hover: #C7D2FE;
+            --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+            --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 12px 32px rgba(79, 70, 229, 0.12);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+            --gradient-primary: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%);
+            --gradient-warm: linear-gradient(135deg, #F59E0B 0%, #F97316 100%);
+            --gradient-cool: linear-gradient(135deg, #06B6D4 0%, #3B82F6 100%);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { -webkit-text-size-adjust: 100%; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-700);
+            background: var(--bg-page);
+            min-height: 100vh;
+            background-image:
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+                radial-gradient(at 100% 0%, rgba(245, 158, 11, 0.06) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        /* ============ 布局 ============ */
+        .app {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px 24px 80px;
+        }
+
+        /* ============ Header ============ */
+        .header {
+            margin-bottom: 32px;
+            animation: slideInDown 0.5s ease-out;
+        }
+        .header-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: var(--primary-50);
+            color: var(--primary-500);
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
+        .header-tag::before {
+            content: '';
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--text-900);
+            letter-spacing: -0.5px;
+            margin-bottom: 6px;
+        }
+        .header h1 .version {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--primary-500);
+            background: var(--primary-50);
+            padding: 2px 10px;
+            border-radius: 999px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        .header p {
+            color: var(--text-500);
+            font-size: 14px;
+        }
+        .header p.greeting {
+            margin-top: 4px;
+            color: var(--primary-500);
+            font-weight: 500;
+            font-size: 15px;
+        }
+
+        /* ============ 卡片通用 ============ */
+        .card {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border);
+            transition: box-shadow 0.2s ease;
+            animation: fadeInUp 0.4s ease-out;
+        }
+        .card + .card { margin-top: 20px; }
+        .card-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-900);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title::before {
+            content: '';
+            width: 4px; height: 16px;
+            border-radius: 2px;
+            background: var(--gradient-primary);
+        }
+        .card-title .help {
+            font-size: 12px;
+            color: var(--text-300);
+            font-weight: 400;
+            margin-left: auto;
+        }
+
+        /* ============ 输入区 ============ */
+        .input-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .input-block label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-700);
+            margin-bottom: 8px;
+        }
+        .input-block label .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: var(--primary-50);
+            color: var(--primary-500);
+            font-size: 11px;
+            border-radius: 4px;
+            margin-left: 6px;
+            font-family: ui-monospace, "SF Mono", Consolas, monospace;
+        }
+        textarea {
+            width: 100%;
+            min-height: 180px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            font-size: 12px;
+            font-family: ui-monospace, "SF Mono", Consolas, monospace;
+            line-height: 1.5;
+            color: var(--text-700);
+            background: #FAFBFC;
+            resize: vertical;
+            transition: all 0.2s ease;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary-400);
+            background: #FFFFFF;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+        }
+        .input-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 22px;
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-primary {
+            background: var(--gradient-primary);
+            color: var(--text-inverse);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.35);
+        }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-500);
+            border: 1px solid var(--border);
+        }
+        .btn-ghost:hover {
+            background: var(--bg-page);
+            color: var(--text-700);
+            border-color: var(--border-hover);
+        }
+        .actions-spacer { flex: 1; }
+        .hint {
+            font-size: 12px;
+            color: var(--text-300);
+        }
+
+        /* ============ 提示/错误 ============ */
+        .alert {
+            margin-top: 16px;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            display: none;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .alert.show { display: flex; }
+        .alert-error {
+            background: var(--danger-50);
+            color: #991B1B;
+            border: 1px solid #FECACA;
+        }
+        .alert-warn {
+            background: var(--warning-50);
+            color: #92400E;
+            border: 1px solid #FDE68A;
+        }
+        .alert-icon {
+            width: 18px; height: 18px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        /* ============ 结果区 ============ */
+        .result-section { display: none; }
+        .result-section.show { display: block; }
+        .result-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+            animation: fadeInUp 0.4s ease-out;
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            background: var(--gradient-primary);
+        }
+        .stat-card.warm::before { background: var(--gradient-warm); }
+        .stat-card.cool::before { background: var(--gradient-cool); }
+        .stat-label {
+            font-size: 13px;
+            color: var(--text-500);
+            margin-bottom: 8px;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: 600;
+            color: var(--text-900);
+            line-height: 1.2;
+            letter-spacing: -0.5px;
+            font-variant-numeric: tabular-nums;
+        }
+        .stat-value .currency {
+            font-size: 18px;
+            color: var(--text-500);
+            margin-right: 2px;
+            font-weight: 500;
+        }
+        .stat-detail {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px dashed var(--border);
+            font-size: 12px;
+            color: var(--text-500);
+            display: flex;
+            justify-content: space-between;
+        }
+        .stat-detail strong {
+            color: var(--text-700);
+            font-weight: 500;
+        }
+
+        /* ============ 明细表 ============ */
+        .table-wrap {
+            overflow-x: auto;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            background: #FFFFFF;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        thead th {
+            background: var(--bg-page);
+            color: var(--text-700);
+            font-weight: 500;
+            text-align: left;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+        tbody td {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-700);
+            font-variant-numeric: tabular-nums;
+        }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: var(--bg-page); }
+        tbody tr.excluded {
+            background: #FAFAFA;
+            color: var(--text-300);
+        }
+        tbody tr.excluded:hover { background: #F5F5F5; }
+        tbody tr.excluded td { color: var(--text-300); font-style: italic; }
+
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .tag-rest { background: var(--bg-warm); color: #92400E; }
+        .tag-work { background: var(--info-50); color: #1E40AF; }
+        .tag-other { background: #F1F5F9; color: var(--text-500); }
+        .tag-ok { background: var(--success-50); color: #065F46; }
+        .tag-no  { background: var(--danger-50); color: #991B1B; }
+        .tag-warn { background: var(--warning-50); color: #92400E; }
+
+        .empty {
+            text-align: center;
+            color: var(--text-300);
+            padding: 32px 16px;
+            font-size: 13px;
+        }
+
+        /* ============ 使用说明 ============ */
+        .help-section ol {
+            padding-left: 20px;
+            color: var(--text-700);
+        }
+        .help-section ol li {
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .help-section code {
+            background: var(--bg-page);
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-family: ui-monospace, "SF Mono", Consolas, monospace;
+            font-size: 12px;
+            color: var(--primary-500);
+        }
+        .help-section .privacy {
+            margin-top: 14px;
+            padding: 10px 14px;
+            background: var(--success-50);
+            color: #065F46;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+        }
+        .help-section .privacy strong { color: #047857; }
+
+        /* ============ 版本信息 ============ */
+        .version-list {
+            font-size: 12px;
+            color: var(--text-500);
+            line-height: 2;
+        }
+        .version-list .current {
+            color: var(--primary-500);
+            font-weight: 500;
+        }
+
+        /* ============ 动画 ============ */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideInDown {
+            from { opacity: 0; transform: translateY(-12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* ============ 响应式 ============ */
+        @media (max-width: 900px) {
+            .input-grid { grid-template-columns: 1fr; }
+            .result-cards { grid-template-columns: 1fr; }
+            .stat-card + .stat-card { margin-top: 16px; }
+        }
+        @media (max-width: 600px) {
+            .app { padding: 16px 12px 60px; }
+            .header h1 { font-size: 22px; }
+            .card { padding: 18px; }
+            .stat-value { font-size: 26px; }
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+
+    <!-- ============ 顶部 ============ -->
+    <header class="header">
+        <span class="header-tag">离线工具 · 数据不外传</span>
+        <h1>QT延时计算器 <span class="version">v2.0</span></h1>
+        <p>班次 + 餐补二次复核 · 精确到分钟 · 自动识别调休补班</p>
+        <p id="greeting" class="greeting" style="display:none;"></p>
+    </header>
+
+    <!-- ============ 输入区 ============ -->
+    <section class="card">
+        <div class="card-title">
+            数据输入
+            <span class="help">分别粘贴从 QHR 系统导出的打卡与班次数据</span>
+        </div>
+        <div class="input-grid">
+            <div class="input-block">
+                <label>打卡数据 <span class="badge">alist!2CXvv_JQ9M03QhX8PGCgxw.220302</span></label>
+                <textarea id="cardInput" placeholder="在此粘贴打卡 JSON 数据..."></textarea>
+            </div>
+            <div class="input-block">
+                <label>班次 / 餐补数据 <span class="badge">alist!G8_TRwtFegd0QeO2BfN6kg.220398</span></label>
+                <textarea id="shiftInput" placeholder="在此粘贴班次 JSON 数据..."></textarea>
+            </div>
+        </div>
+        <div class="input-actions">
+            <button class="btn btn-primary" id="calcBtn">计算</button>
+            <button class="btn btn-ghost" id="resetBtn">清空</button>
+            <span class="actions-spacer"></span>
+            <span class="hint">提示：所有计算在浏览器内完成，不会上传数据</span>
+        </div>
+        <div class="alert alert-error" id="errAlert">
+            <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span id="errMsg"></span>
+        </div>
+    </section>
+
+    <!-- ============ 结果区 ============ -->
+    <section class="result-section" id="resultSection">
+        <div class="result-cards">
+            <div class="stat-card cool">
+                <div class="stat-label">工作日晚加班</div>
+                <div class="stat-value"><span class="currency">¥</span><span id="workAmount">0.00</span></div>
+                <div class="stat-detail">
+                    <span>总分钟数 <strong id="workMinutes">0</strong></span>
+                </div>
+            </div>
+            <div class="stat-card warm">
+                <div class="stat-label">周末加班</div>
+                <div class="stat-value"><span class="currency">¥</span><span id="weekendAmount">0.00</span></div>
+                <div class="stat-detail">
+                    <span>总分钟数 <strong id="weekendMinutes">0</strong></span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">合计加班费</div>
+                <div class="stat-value"><span class="currency">¥</span><span id="totalAmount">0.00</span></div>
+                <div class="stat-detail">
+                    <span>总天数 <strong id="totalDays">0</strong></span>
+                    <span>延时餐补次数 <strong id="includedDays">0</strong></span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ 明细表 ============ -->
+    <section class="card" id="detailCard" style="display:none;">
+        <div class="card-title">
+            延时及考勤异常明细
+            <span class="help">仅显示有考勤异常或有加班的日期</span>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>班次</th>
+                        <th>餐补</th>
+                        <th>判定</th>
+                        <th>异常</th>
+                        <th>首打</th>
+                        <th>末打</th>
+                        <th>分钟</th>
+                        <th>金额</th>
+                        <th>备注</th>
+                    </tr>
+                </thead>
+                <tbody id="detailBody"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ============ 使用说明 ============ -->
+    <section class="card help-section">
+        <div class="card-title">使用方法</div>
+        <ol>
+            <li>用浏览器打开 <code>QHR系统</code> ，按 F12 打开 DevTools，切到 <code>Network</code> 面板</li>
+            <li>鼠标点击"个人考勤查询"，此时<code>Network</code>窗口响应</li>
+            <li>复制<code>alist!2CXvv_JQ9M03QhX8PGCgxw.220302</code> 值到 <strong>打卡数据</strong> 输入框</li>
+            <li>复制<code>alist!G8_TRwtFegd0QeO2BfN6kg.220398</code> 值到 <strong>班次/餐补数据</strong> 输入框</li>
+            <li>点击「计算」按钮，即可在下方查看当月延时餐补与考勤异常明细</li>
+        </ol>
+        <div class="privacy">
+            <strong>隐私承诺：</strong>本工具 100% 在本地浏览器内运行，绝不会上传任何数据，请放心使用。
+        </div>
+    </section>
+
+    <!-- ============ 版本信息 ============ -->
+    <section class="card">
+        <div class="card-title">版本日志</div>
+        <div class="version-list">
+            <div><strong>v2.0</strong> · 全新重写：按班次判定（不再机械按周六日）、增加延时餐补二次复核、UI 卡片化升级</div>
+            <div>基于参考版本 v0.3 (2023-01-07) · 修复调休补班误判、精确到分钟计费</div>
+            <div class="current">当前版本：v2.0</div>
+        </div>
+    </section>
+
+</div>
+
+<script>
+/* ============ 常量 ============ */
+const WORKDAY_RATE  = 20 / 60;   // 工作日晚：20元/小时 → 元/分钟
+const WEEKEND_RATE  = 30 / 60;   // 周末：30元/小时 → 元/分钟
+const NIGHT_START_H = 19;        // 工作日晚加班起点：19:00
+
+/* ============ 工具 ============ */
+function round2(x) { return Math.round(x * 100) / 100; }
+
+function fmtMoney(x) { return round2(x).toFixed(2); }
+
+function showError(msg) {
+    const el = document.getElementById('errAlert');
+    document.getElementById('errMsg').textContent = msg;
+    el.classList.add('show');
+}
+
+function hideError() {
+    document.getElementById('errAlert').classList.remove('show');
+}
+
+/* ============ JSON 解析 ============ */
+function parseJsonFromTextarea(text) {
+    // 去掉多余空白（DevTools 预览复制有时含前后空白）
+    const t = text.trim();
+    if (!t) throw new Error('输入内容为空');
+    try {
+        return JSON.parse(t);
+    } catch (e) {
+        throw new Error('JSON 解析失败：' + e.message);
+    }
+}
+
+/* ============ 数据归一化 ============ */
+// 输入2的日期字段自适应：TERM(班次数据常见) -> CARDTIME -> SHIFTTERM -> DATE -> 字段含 date/time/day
+function detectDateFieldKey(obj) {
+    const keys = Object.keys(obj);
+    const candidates = ['TERM', 'CARDTIME', 'SHIFTTERM', 'DATE', 'date', 'time', 'day', 'WORKDATE', 'ATTENDDATE'];
+    for (const k of candidates) {
+        if (k in obj) return k;
+    }
+    for (const k of keys) {
+        const lk = k.toLowerCase();
+        if (lk.includes('date') || lk.includes('time') || lk.includes('day') || k.includes('日')) return k;
+    }
+    return null;
+}
+
+function extractDateStr(value) {
+    if (!value) return null;
+    const s = String(value);
+    // 形如 "2023-01-15 09:00:00" 或 "2023-01-15"
+    const m = s.match(/(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1];
+    // 形如 "2023-01-15-N"（SHIFTTERM 风格）
+    const m2 = s.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m2) return m2[1];
+    return null;
+}
+
+function normalizeC018(v) {
+    if (v === 1 || v === '1' || v === true || v === 'true') return 1;
+    return 0;
+}
+
+/* ============ 班次判定 ============ */
+function isRestShift(shift) {
+    return shift != null && String(shift).trim() === '休息';
+}
+
+function isNormalShift(shift) {
+    if (!shift) return false;
+    const s = String(shift);
+    return s.includes('深圳') || s.includes('佛山') || s.includes('桂林');
+}
+
+/* ============ 时间工具 ============ */
+function toMs(dateStr, timeStr) {
+    // dateStr: YYYY-MM-DD, timeStr: HH:MM:SS
+    return new Date(`${dateStr} ${timeStr}`).getTime();
+}
+
+/* ============ 核心：每天加班计算 ============ */
+function computeDayOvertime(dayInfo) {
+    /*
+     * dayInfo = {
+     *   date: 'YYYY-MM-DD',
+     *   shift: '休息' | '深圳'/'佛山'/'桂林' | other,
+     *   c018: 0 | 1,
+     *   cards: [{CARDTIME: 'YYYY-MM-DD HH:MM:SS'}, ...] (按时间排序)
+     * }
+     * 返回: { type, minutes, firstCard, lastCard, reason, excluded }
+     */
+    const { date, shift, c018, cards } = dayInfo;
+
+    // 二次复核
+    if (c018 !== 1) {
+        return {
+            type: '-',
+            minutes: 0,
+            firstCard: cards[0]?.CARDTIME || '-',
+            lastCard:  cards[cards.length - 1]?.CARDTIME || '-',
+            reason: `二次复核不通过：餐补 = ${c018}`,
+            excluded: true,
+            shift, c018
+        };
+    }
+
+    // 周末加班判定
+    if (isRestShift(shift)) {
+        if (!cards || cards.length < 2) {
+            return {
+                type: '周末',
+                minutes: 0,
+                firstCard: cards[0]?.CARDTIME || '-',
+                lastCard: '-',
+                reason: '班次为休息，但当日打卡不足2次',
+                excluded: false,
+                shift, c018
+            };
+        }
+        const firstMs = new Date(cards[0].CARDTIME).getTime();
+        const lastMs  = new Date(cards[cards.length - 1].CARDTIME).getTime();
+        const minutes = Math.floor((lastMs - firstMs) / 60000);
+        return {
+            type: '周末',
+            minutes,
+            firstCard: cards[0].CARDTIME,
+            lastCard: cards[cards.length - 1].CARDTIME,
+            reason: '-',
+            excluded: false,
+            shift, c018
+        };
+    }
+
+    // 工作日晚加班判定
+    if (isNormalShift(shift)) {
+        if (!cards || cards.length === 0) {
+            return {
+                type: '工作日晚',
+                minutes: 0,
+                firstCard: '-',
+                lastCard: '-',
+                reason: '有班次但当日无打卡',
+                excluded: false,
+                shift, c018
+            };
+        }
+        const lastMs      = new Date(cards[cards.length - 1].CARDTIME).getTime();
+        const nightStartMs = new Date(`${date} ${String(NIGHT_START_H).padStart(2,'0')}:00:00`).getTime();
+        if (lastMs <= nightStartMs) {
+            return {
+                type: '工作日晚',
+                minutes: 0,
+                firstCard: cards[0].CARDTIME,
+                lastCard:  cards[cards.length - 1].CARDTIME,
+                reason: `末次打卡未晚于 ${NIGHT_START_H}:00`,
+                excluded: false,
+                shift, c018
+            };
+        }
+        const minutes = Math.floor((lastMs - nightStartMs) / 60000);
+        return {
+            type: '工作日晚',
+            minutes,
+            firstCard: cards[0].CARDTIME,
+            lastCard: cards[cards.length - 1].CARDTIME,
+            reason: '-',
+            excluded: false,
+            shift, c018
+        };
+    }
+
+    // 其他班次
+    return {
+        type: '-',
+        minutes: 0,
+        firstCard: cards[0]?.CARDTIME || '-',
+        lastCard:  cards[cards.length - 1]?.CARDTIME || '-',
+        reason: `未识别班次：${shift}`,
+        excluded: true,
+        shift, c018
+    };
+}
+
+/* ============ 主流程 ============ */
+function calculate() {
+    hideError();
+    document.getElementById('resultSection').classList.remove('show');
+    document.getElementById('detailCard').style.display = 'none';
+
+    let cardJson, shiftJson;
+    try {
+        cardJson  = parseJsonFromTextarea(document.getElementById('cardInput').value);
+        shiftJson = parseJsonFromTextarea(document.getElementById('shiftInput').value);
+    } catch (e) {
+        showError(e.message);
+        return;
+    }
+
+    if (!Array.isArray(cardJson)) {
+        showError('打卡数据 JSON 应为数组格式（请确认复制的是 list 类型的预览值）');
+        return;
+    }
+    if (!Array.isArray(shiftJson)) {
+        showError('班次数据 JSON 应为数组格式（请确认复制的是 list 类型的预览值）');
+        return;
+    }
+
+    // ---- 1. 按日聚合打卡数据 ----
+    const dayMap = new Map(); // date -> { cards: [] }
+    for (const row of cardJson) {
+        if (!row || !row.CARDTIME) continue;
+        const date = extractDateStr(row.CARDTIME);
+        if (!date) continue;
+        if (!dayMap.has(date)) dayMap.set(date, { cards: [] });
+        dayMap.get(date).cards.push(row);
+    }
+    for (const v of dayMap.values()) {
+        v.cards.sort((a, b) => new Date(a.CARDTIME) - new Date(b.CARDTIME));
+    }
+
+    // ---- 2. 班次数据按日索引 ----
+    if (shiftJson.length > 0) {
+        const sample = shiftJson[0];
+        const dateKey = detectDateFieldKey(sample);
+        if (!dateKey) {
+            showError('班次数据未识别到日期字段。请确认 JSON 中存在 CARDTIME / SHIFTTERM / DATE 等字段');
+            return;
+        }
+        let validShiftRows = 0;
+        for (const row of shiftJson) {
+            const date = extractDateStr(row[dateKey]);
+            if (!date) continue;
+            validShiftRows++;
+            const entry = dayMap.get(date) || { cards: [] };
+            entry.shift       = row.SHIFT;
+            entry.c018        = normalizeC018(row.C018_1);
+            entry.isException = row.ISEXCEPTION === '是';
+            dayMap.set(date, entry);
+        }
+        if (validShiftRows === 0) {
+            showError(`班次数据的日期字段「${dateKey}」无法解析为日期，请检查数据格式`);
+            return;
+        }
+    }
+
+    // ---- 3. 按日判定 + 计费 ----
+    const dates = [...dayMap.keys()].sort();
+    let workMinutes = 0, weekendMinutes = 0;
+    let workAmount = 0, weekendAmount = 0;
+    let includedDays = 0;
+    const detailRows = [];
+
+    for (const date of dates) {
+        const info = dayMap.get(date);
+        const result = computeDayOvertime({
+            date,
+            shift: info.shift,
+            c018:  info.c018,
+            cards: info.cards
+        });
+
+        let minutes = result.minutes;
+        let amount = 0;
+        if (!result.excluded) {
+            if (result.type === '工作日晚') {
+                workMinutes += minutes;
+                amount = minutes * WORKDAY_RATE;
+                workAmount  += amount;
+                if (minutes > 0) includedDays++;
+            } else if (result.type === '周末') {
+                weekendMinutes += minutes;
+                amount = minutes * WEEKEND_RATE;
+                weekendAmount  += amount;
+                if (minutes > 0) includedDays++;
+            } else {
+                // 0 分钟但未 excluded：不算入总天数也不计费
+            }
+        }
+
+        detailRows.push({
+            date, shift: result.shift, c018: result.c018,
+            type: result.type, first: result.firstCard, last: result.lastCard,
+            minutes, amount: round2(amount), reason: result.reason, excluded: result.excluded,
+            isException: !!info.isException
+        });
+    }
+
+    // ---- 3.5 招呼：根据 TITLE 首字生成称呼 ----
+    renderGreeting(shiftJson);
+
+    // ---- 4. 渲染 ----
+    renderResult(workMinutes, workAmount, weekendMinutes, weekendAmount,
+                 dates.length, includedDays);
+    // 只显示有考勤异常 或 有加班分钟数的日期
+    const filteredRows = detailRows.filter(r => r.isException || r.minutes > 0);
+    renderDetail(filteredRows);
+}
+
+/* ============ 渲染 ============ */
+function renderGreeting(shiftJson) {
+    const el = document.getElementById('greeting');
+    if (!el) return;
+    const firstRow = Array.isArray(shiftJson) && shiftJson.length > 0 ? shiftJson[0] : null;
+    const title = firstRow && firstRow.TITLE ? String(firstRow.TITLE).trim() : '';
+    const firstChar = title ? title.charAt(0) : '';
+    if (firstChar) {
+        el.textContent = `${firstChar}工，您好`;
+        el.style.display = '';
+    } else {
+        el.textContent = '';
+        el.style.display = 'none';
+    }
+}
+
+function renderResult(workMin, workAmt, weekendMin, weekendAmt, totalDays, includedDays) {
+    document.getElementById('workMinutes').textContent     = workMin;
+    document.getElementById('workAmount').textContent      = fmtMoney(workAmt);
+    document.getElementById('weekendMinutes').textContent  = weekendMin;
+    document.getElementById('weekendAmount').textContent   = fmtMoney(weekendAmt);
+    document.getElementById('totalAmount').textContent     = fmtMoney(workAmt + weekendAmt);
+    document.getElementById('totalDays').textContent       = totalDays;
+    document.getElementById('includedDays').textContent    = includedDays;
+    document.getElementById('resultSection').classList.add('show');
+}
+
+function shiftTag(shift) {
+    if (isRestShift(shift))  return `<span class="tag tag-rest">休息</span>`;
+    if (isNormalShift(shift)) return `<span class="tag tag-work">${escapeHtml(shift)}</span>`;
+    if (!shift) return `<span class="tag tag-other">—</span>`;
+    return `<span class="tag tag-other">${escapeHtml(shift)}</span>`;
+}
+
+function c018Tag(v) {
+    return v === 1
+        ? `<span class="tag tag-ok">1</span>`
+        : `<span class="tag tag-no">${v}</span>`;
+}
+
+function typeTag(t) {
+    if (t === '工作日晚') return `<span class="tag tag-work">${t}</span>`;
+    if (t === '周末')     return `<span class="tag tag-rest">${t}</span>`;
+    return `<span class="tag tag-other">—</span>`;
+}
+
+function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c =>
+        ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])
+    );
+}
+
+function fmtCardTime(s) {
+    if (!s || s === '-') return '-';
+    const m = String(s).match(/\d{4}-\d{2}-\d{2} (\d{2}:\d{2}:\d{2})/);
+    return m ? m[1] : escapeHtml(s);
+}
+
+function renderDetail(rows) {
+    const tbody = document.getElementById('detailBody');
+    if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="empty">本月无异常、无加班的正常上下班日，已为您隐藏</td></tr>`;
+    } else {
+        tbody.innerHTML = rows.map(r => `
+            <tr class="${r.excluded ? 'excluded' : ''}">
+                <td>${r.date}</td>
+                <td>${shiftTag(r.shift)}</td>
+                <td>${c018Tag(r.c018)}</td>
+                <td>${typeTag(r.type)}</td>
+                <td>${r.isException ? '<span class="tag tag-warn">异常</span>' : '-'}</td>
+                <td>${fmtCardTime(r.first)}</td>
+                <td>${fmtCardTime(r.last)}</td>
+                <td>${r.minutes}</td>
+                <td>${r.excluded ? '-' : '¥' + r.amount.toFixed(2)}</td>
+                <td>${escapeHtml(r.reason)}</td>
+            </tr>
+        `).join('');
+    }
+    document.getElementById('detailCard').style.display = '';
+}
+
+/* ============ 绑定事件 ============ */
+document.getElementById('calcBtn').addEventListener('click', calculate);
+document.getElementById('resetBtn').addEventListener('click', () => {
+    document.getElementById('cardInput').value = '';
+    document.getElementById('shiftInput').value = '';
+    hideError();
+    document.getElementById('resultSection').classList.remove('show');
+    document.getElementById('detailCard').style.display = 'none';
+});
+// 按 Ctrl/Cmd + Enter 触发
+document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') calculate();
+});
+</script>
+</body>
+</html>
