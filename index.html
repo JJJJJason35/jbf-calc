@@ -415,6 +415,19 @@
         .tag-no  { background: var(--danger-50); color: #991B1B; }
         .tag-warn { background: var(--warning-50); color: #92400E; }
 
+.show-all-toggle {
+            margin-left: auto;
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--text-500);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+        }
+        .show-all-toggle input { accent-color: var(--primary-500); cursor: pointer; }
+
         .empty {
             text-align: center;
             color: var(--text-300);
@@ -545,6 +558,12 @@
             </svg>
             <span id="errMsg"></span>
         </div>
+        <div class="alert alert-warn" id="diagAlert">
+            <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span id="diagMsg"></span>
+        </div>
     </section>
 
     <!-- ============ 结果区 ============ -->
@@ -579,7 +598,9 @@
     <section class="card" id="detailCard" style="display:none;">
         <div class="card-title">
             延时及考勤异常明细
-            <span class="help">仅显示有考勤异常或有加班的日期</span>
+            <label class="show-all-toggle" for="showAllToggle">
+                <input type="checkbox" id="showAllToggle"> 显示全部日期（含被剔除的）
+            </label>
         </div>
         <div class="table-wrap">
             <table>
@@ -621,9 +642,10 @@
     <section class="card">
         <div class="card-title">版本日志</div>
         <div class="version-list">
+            <div><strong>v2.2</strong> · 兼容性增强：自动解包 DevTools 复制的包装对象、兼容斜杠日期格式、新增诊断提示（月份混入/班次缺失/复核剔除统计）与"显示全部日期"开关</div>
             <div><strong>v2.0</strong> · 全新重写：按班次判定（不再机械按周六日）、增加延时餐补二次复核、UI 卡片化升级</div>
             <div>基于参考版本 v0.3 (2023-01-07) · 修复调休补班误判、精确到分钟计费</div>
-            <div class="current">当前版本：v2.0</div>
+            <div class="current">当前版本：v2.2</div>
         </div>
     </section>
 
@@ -650,16 +672,56 @@ function hideError() {
     document.getElementById('errAlert').classList.remove('show');
 }
 
+/* 诊断信息（黄色警示条）：不影响计算，只帮助用户看清"为什么没算" */
+function showDiag(msg) {
+    const el = document.getElementById('diagAlert');
+    if (!el) return;
+    document.getElementById('diagMsg').textContent = msg;
+    el.classList.add('show');
+}
+
+function hideDiag() {
+    const el = document.getElementById('diagAlert');
+    if (el) el.classList.remove('show');
+}
+
 /* ============ JSON 解析 ============ */
 function parseJsonFromTextarea(text) {
     // 去掉多余空白（DevTools 预览复制有时含前后空白）
     const t = text.trim();
     if (!t) throw new Error('输入内容为空');
+    let parsed;
     try {
-        return JSON.parse(t);
+        parsed = JSON.parse(t);
     } catch (e) {
         throw new Error('JSON 解析失败：' + e.message);
     }
+    const unwrapped = unwrapData(parsed);
+    if (unwrapped !== parsed) {
+        showDiag('检测到数据被对象包裹，已自动提取其中的数组字段继续计算');
+    }
+    return unwrapped;
+}
+
+// 兼容 DevTools 复制出的各种包装格式，自动提取数组：
+// 1) {list:[...]} / {data:[...]} / {rows:[...]} / {result:[...]} / {records:[...]} / {items:[...]} / {value:[...]}
+// 2) 仅含一个数组字段的任意对象
+// 3) {"0":{...},"1":{...}} 数字键对象映射
+function unwrapData(obj) {
+    if (Array.isArray(obj)) return obj;
+    if (obj && typeof obj === 'object') {
+        const namedKeys = ['list', 'data', 'rows', 'result', 'records', 'items', 'value'];
+        for (const k of namedKeys) {
+            if (Array.isArray(obj[k])) return obj[k];
+        }
+        const arrayKeys = Object.keys(obj).filter(k => Array.isArray(obj[k]));
+        if (arrayKeys.length === 1) return obj[arrayKeys[0]];
+        const keys = Object.keys(obj);
+        if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) {
+            return keys.sort((a, b) => Number(a) - Number(b)).map(k => obj[k]);
+        }
+    }
+    return obj; // 原样返回，交由后续数组校验给出明确错误
 }
 
 /* ============ 数据归一化 ============ */
@@ -680,12 +742,16 @@ function detectDateFieldKey(obj) {
 function extractDateStr(value) {
     if (!value) return null;
     const s = String(value);
-    // 形如 "2023-01-15 09:00:00" 或 "2023-01-15"
-    const m = s.match(/(\d{4}-\d{2}-\d{2})/);
-    if (m) return m[1];
-    // 形如 "2023-01-15-N"（SHIFTTERM 风格）
-    const m2 = s.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (m2) return m2[1];
+    // 形如 "2026-11-01 09:25:53"、"2026-11-01"、"2026-11-01-N"
+    let m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) {
+        return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+    }
+    // 兼容斜杠格式 "2026/11/01 09:25:53"
+    m = s.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+    if (m) {
+        return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+    }
     return null;
 }
 
@@ -817,6 +883,7 @@ function computeDayOvertime(dayInfo) {
 /* ============ 主流程 ============ */
 function calculate() {
     hideError();
+    hideDiag();
     document.getElementById('resultSection').classList.remove('show');
     document.getElementById('detailCard').style.display = 'none';
 
@@ -830,11 +897,19 @@ function calculate() {
     }
 
     if (!Array.isArray(cardJson)) {
-        showError('打卡数据 JSON 应为数组格式（请确认复制的是 list 类型的预览值）');
+        showError('打卡数据 JSON 应为数组格式。若为 {xxx:[...]} 包装对象，工具会自动解包；当前未能识别出数组，请检查复制的内容');
         return;
     }
     if (!Array.isArray(shiftJson)) {
-        showError('班次数据 JSON 应为数组格式（请确认复制的是 list 类型的预览值）');
+        showError('班次数据 JSON 应为数组格式。若为 {xxx:[...]} 包装对象，工具会自动解包；当前未能识别出数组，请检查复制的内容');
+        return;
+    }
+    if (cardJson.length === 0) {
+        showError('打卡数据解析成功，但记录数为 0，请确认粘贴的是打卡明细（含 CARDTIME 字段）');
+        return;
+    }
+    if (shiftJson.length === 0) {
+        showError('班次数据解析成功，但记录数为 0，请确认粘贴的是班次明细（含 TERM / SHIFT / C018_1 字段）');
         return;
     }
 
@@ -852,13 +927,15 @@ function calculate() {
     }
 
     // ---- 2. 班次数据按日索引 ----
+    let shiftDateKey = null;
     if (shiftJson.length > 0) {
         const sample = shiftJson[0];
         const dateKey = detectDateFieldKey(sample);
         if (!dateKey) {
-            showError('班次数据未识别到日期字段。请确认 JSON 中存在 CARDTIME / SHIFTTERM / DATE 等字段');
+            showError('班次数据未识别到日期字段。请确认 JSON 中存在 TERM / CARDTIME / SHIFTTERM / DATE 等字段');
             return;
         }
+        shiftDateKey = dateKey;
         let validShiftRows = 0;
         for (const row of shiftJson) {
             const date = extractDateStr(row[dateKey]);
@@ -874,6 +951,18 @@ function calculate() {
             showError(`班次数据的日期字段「${dateKey}」无法解析为日期，请检查数据格式`);
             return;
         }
+    }
+
+    // ---- 2.5 诊断：月份混入 / 班次缺失 ----
+    const diagMsgs = [];
+    const months = new Set([...dayMap.keys()].map(d => d.slice(0, 7)));
+    if (months.size > 1) {
+        diagMsgs.push(`打卡数据包含 ${months.size} 个月份（${[...months].sort().join('、')}），已混合计算`);
+    }
+    const noShiftDates = [...dayMap.keys()].filter(d => dayMap.get(d).shift === undefined);
+    if (noShiftDates.length > 0) {
+        const preview = noShiftDates.slice(0, 5).join('、') + (noShiftDates.length > 5 ? ' 等' : '');
+        diagMsgs.push(`有 ${noShiftDates.length} 天（${preview}）在班次数据中无记录，无法判定班次，已按"未识别班次"剔除 —— 请确认两个输入框粘贴的是同一个月的数据`);
     }
 
     // ---- 3. 按日判定 + 计费 ----
@@ -921,12 +1010,32 @@ function calculate() {
     // ---- 3.5 招呼：根据 TITLE 首字生成称呼 ----
     renderGreeting(shiftJson);
 
+    // ---- 3.6 诊断：剔除统计 ----
+    const c018Excluded = detailRows.filter(r => r.excluded && r.reason.includes('二次复核')).length;
+    const shiftExcluded = detailRows.filter(r => r.excluded && r.reason.includes('未识别班次')).length;
+    const countedDays = detailRows.filter(r => !r.excluded && r.minutes > 0).length;
+    if (diagMsgs.length > 0 || c018Excluded > 0) {
+        const parts = [];
+        if (diagMsgs.length > 0) parts.push(...diagMsgs);
+        if (c018Excluded > 0) {
+            parts.push(`本月共 ${detailRows.length} 天：计入 ${countedDays} 天，${c018Excluded} 天因延时餐补 ≠ 1 被二次复核剔除`);
+        }
+        showDiag(parts.join('；'));
+    }
+
     // ---- 4. 渲染 ----
     renderResult(workMinutes, workAmount, weekendMinutes, weekendAmount,
                  dates.length, includedDays);
-    // 只显示有考勤异常 或 有加班分钟数的日期
-    const filteredRows = detailRows.filter(r => r.isException || r.minutes > 0);
-    renderDetail(filteredRows);
+    // 默认只显示有考勤异常或有加班分钟数的日期；勾选开关后显示全部
+    window.__allDetailRows = detailRows;
+    applyDetailFilter();
+}
+
+function applyDetailFilter() {
+    const rows = window.__allDetailRows || [];
+    const showAll = document.getElementById('showAllToggle')?.checked;
+    const filtered = showAll ? rows : rows.filter(r => r.isException || r.minutes > 0);
+    renderDetail(filtered);
 }
 
 /* ============ 渲染 ============ */
@@ -1084,10 +1193,13 @@ document.querySelectorAll('.privacy-wrap textarea').forEach(ta => {
 
 /* ============ 绑定事件 ============ */
 document.getElementById('calcBtn').addEventListener('click', calculate);
+document.getElementById('showAllToggle').addEventListener('change', applyDetailFilter);
 document.getElementById('resetBtn').addEventListener('click', () => {
     document.getElementById('cardInput').value = '';
     document.getElementById('shiftInput').value = '';
     hideError();
+    hideDiag();
+    window.__allDetailRows = null;
     document.getElementById('resultSection').classList.remove('show');
     document.getElementById('detailCard').style.display = 'none';
 });
